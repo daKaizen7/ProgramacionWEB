@@ -1,0 +1,322 @@
+@page "/facturas"
+@using System.Collections.Generic
+@using System.Threading.Tasks
+@using Services
+@inject ServicioEntidad servicioEntidad
+@inject NavigationManager navegacionManager
+
+<PageTitle>Lista de Facturas</PageTitle>
+
+<div class="container-xl">
+    <div class="table-responsive">
+        <div class="table-wrapper">
+            <div class="table-title">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <h2>Administrar <b>Facturas</b></h2>
+                    </div>
+                    <div class="col-sm-6">
+                        <button class="btn btn-success" @onclick="AbrirModalAgregar">
+                            <i class="material-icons">&#xE147;</i> <span>Agregar Nueva Factura</span>
+                        </button>
+                        <button class="btn btn-danger" @onclick="EliminarSeleccionados">
+                            <i class="material-icons">&#xE15C;</i> <span>Eliminar</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (cargando)
+            {
+                <p><em>Cargando...</em></p>
+            }
+            else if (facturas == null || facturas.Count == 0)
+            {
+                <p>No hay facturas disponibles.</p>
+            }
+            else
+            {
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                <span class="custom-checkbox">
+                                    <input type="checkbox" @bind="@seleccionarTodos">
+                                    <label></label>
+                                </span>
+                            </th>
+                            <th>Número</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th>Total</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var factura in facturas)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="custom-checkbox">
+                                        <input type="checkbox" @bind="@facturaSeleccionada[factura]">
+                                        <label></label>
+                                    </span>
+                                </td>
+                                <td>@ObtenerValor(factura, "numero")</td>
+                                <td>@FormatearFecha(ObtenerValor(factura, "fecha"))</td>
+                                <td>@ObtenerNombreCliente(ObtenerValor(factura, "fkidcliente"))</td>
+                                <td>@ObtenerNombreVendedor(ObtenerValor(factura, "fkidvendedor"))</td>
+                                <td>@FormatearPrecio(ObtenerValor(factura, "total"))</td>
+                                <td>
+                                    <a href="#" class="view" @onclick="() => VerDetalleFactura(factura)">
+                                        <i class="material-icons" title="Ver detalle">&#xE8F4;</i>
+                                    </a>
+                                    <a href="#" class="edit" @onclick="() => EditarFactura(factura)">
+                                        <i class="material-icons" title="Editar">&#xE254;</i>
+                                    </a>
+                                    <a href="#" class="delete" @onclick="() => EliminarFactura(factura)">
+                                        <i class="material-icons" title="Eliminar">&#xE872;</i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="clearfix">
+                    <div class="hint-text">Mostrando <b>@facturas.Count</b> facturas</div>
+                    <ul class="pagination">
+                        <li class="page-item disabled"><a href="#">Anterior</a></li>
+                        <li class="page-item active"><a href="#" class="page-link">1</a></li>
+                        <li class="page-item"><a href="#" class="page-link">2</a></li>
+                        <li class="page-item"><a href="#" class="page-link">3</a></li>
+                        <li class="page-item"><a href="#" class="page-link">Siguiente</a></li>
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (errorMensaje != null)
+{
+    <div class="alert alert-danger">
+        Error: @errorMensaje
+    </div>
+}
+
+@code {
+    private List<Dictionary<string, object>> facturas = new List<Dictionary<string, object>>();
+    private List<Dictionary<string, object>> clientes = new List<Dictionary<string, object>>();
+    private List<Dictionary<string, object>> personas = new List<Dictionary<string, object>>();
+    private List<Dictionary<string, object>> vendedores = new List<Dictionary<string, object>>();
+    private bool cargando = true;
+    private string? errorMensaje = null;
+    
+    private bool seleccionarTodos
+    {
+        get => _seleccionarTodos;
+        set
+        {
+            _seleccionarTodos = value;
+            foreach (var clave in facturaSeleccionada.Keys.ToList())
+            {
+                facturaSeleccionada[clave] = _seleccionarTodos;
+            }
+        }
+    }
+    private bool _seleccionarTodos = false;
+    private Dictionary<Dictionary<string, object>, bool> facturaSeleccionada = new();
+
+    private const string PROYECTO = "proyecto";
+    private const string TABLA_FACTURA = "factura";
+    private const string TABLA_CLIENTE = "cliente";
+    private const string TABLA_PERSONA = "persona";
+    private const string TABLA_VENDEDOR = "vendedor";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+    }
+
+    private async Task CargarDatos()
+    {
+        cargando = true;
+        errorMensaje = null;
+
+        try
+        {
+            // Cargar facturas, clientes, personas y vendedores en paralelo
+            var tareasCargar = new[]
+            {
+                CargarFacturas(),
+                CargarClientes(),
+                CargarPersonas(),
+                CargarVendedores()
+            };
+
+            await Task.WhenAll(tareasCargar);
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar datos: {ex.Message}";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task CargarFacturas()
+    {
+        try
+        {
+            var resultado = await servicioEntidad.ObtenerTodosAsync(PROYECTO, TABLA_FACTURA);
+            facturas = resultado ?? new List<Dictionary<string, object>>();
+            
+            // Inicializar checkboxes
+            facturaSeleccionada = facturas.ToDictionary(f => f, f => false);
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar facturas: {ex.Message}";
+            facturas = new List<Dictionary<string, object>>();
+        }
+    }
+
+    private async Task CargarClientes()
+    {
+        try
+        {
+            clientes = await servicioEntidad.ObtenerTodosAsync(PROYECTO, TABLA_CLIENTE) 
+                ?? new List<Dictionary<string, object>>();
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar clientes: {ex.Message}";
+            clientes = new List<Dictionary<string, object>>();
+        }
+    }
+
+    private async Task CargarPersonas()
+    {
+        try
+        {
+            personas = await servicioEntidad.ObtenerTodosAsync(PROYECTO, TABLA_PERSONA) 
+                ?? new List<Dictionary<string, object>>();
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar personas: {ex.Message}";
+            personas = new List<Dictionary<string, object>>();
+        }
+    }
+
+    private async Task CargarVendedores()
+    {
+        try
+        {
+            vendedores = await servicioEntidad.ObtenerTodosAsync(PROYECTO, TABLA_VENDEDOR) 
+                ?? new List<Dictionary<string, object>>();
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar vendedores: {ex.Message}";
+            vendedores = new List<Dictionary<string, object>>();
+        }
+    }
+
+    private string ObtenerValor(Dictionary<string, object> diccionario, string clave)
+    {
+        return diccionario != null && diccionario.TryGetValue(clave, out var valor)
+            ? valor?.ToString() ?? string.Empty
+            : string.Empty;
+    }
+
+    private string FormatearPrecio(string valor)
+    {
+        return decimal.TryParse(valor, out decimal precio) ? precio.ToString("C") : "$0.00";
+    }
+
+    private string FormatearFecha(string valor)
+    {
+        return DateTime.TryParse(valor, out DateTime fecha) ? fecha.ToString("dd/MM/yyyy HH:mm") : string.Empty;
+    }
+
+    private string ObtenerNombreCliente(string idCliente)
+    {
+        if (string.IsNullOrEmpty(idCliente) || !int.TryParse(idCliente, out int id))
+            return "Cliente desconocido";
+
+        var cliente = clientes.FirstOrDefault(c => 
+            ObtenerValor(c, "id") == idCliente);
+            
+        if (cliente == null)
+            return "Cliente no encontrado";
+            
+        var codigoPersona = ObtenerValor(cliente, "fkcodpersona");
+        var persona = personas.FirstOrDefault(p => 
+            ObtenerValor(p, "codigo") == codigoPersona);
+            
+        return persona != null ? ObtenerValor(persona, "nombre") : "Persona no encontrada";
+    }
+
+    private string ObtenerNombreVendedor(string idVendedor)
+    {
+        if (string.IsNullOrEmpty(idVendedor) || !int.TryParse(idVendedor, out int id))
+            return "Vendedor desconocido";
+
+        var vendedor = vendedores.FirstOrDefault(v => 
+            ObtenerValor(v, "id") == idVendedor);
+            
+        if (vendedor == null)
+            return "Vendedor no encontrado";
+            
+        var codigoPersona = ObtenerValor(vendedor, "fkcodpersona");
+        var persona = personas.FirstOrDefault(p => 
+            ObtenerValor(p, "codigo") == codigoPersona);
+            
+        return persona != null ? ObtenerValor(persona, "nombre") : "Persona no encontrada";
+    }
+
+    private void VerDetalleFactura(Dictionary<string, object> factura)
+    {
+        // Navegar a la página de detalle o abrir un modal con los detalles
+        // de productos de la factura (tabla productosporfactura)
+        var numeroFactura = ObtenerValor(factura, "numero");
+        // Ejemplo: navegacionManager.NavigateTo($"/factura-detalle/{numeroFactura}");
+    }
+
+    private void EditarFactura(Dictionary<string, object> factura)
+    {
+        // Aquí va la lógica para abrir un modal de edición
+    }
+
+    private async Task EliminarFactura(Dictionary<string, object> factura)
+    {
+        // En un caso real probablemente se usaría el servicioEntidad para eliminar de la base de datos
+        // Aquí solo lo removemos de la lista local
+        facturas.Remove(factura);
+        facturaSeleccionada.Remove(factura);
+        StateHasChanged();
+    }
+
+    private void EliminarSeleccionados()
+    {
+        var seleccionados = facturaSeleccionada.Where(x => x.Value).Select(x => x.Key).ToList();
+        foreach (var factura in seleccionados)
+        {
+            facturas.Remove(factura);
+            facturaSeleccionada.Remove(factura);
+        }
+        seleccionarTodos = false;
+    }
+
+    private void AbrirModalAgregar()
+    {
+        // Aquí va la lógica para abrir un modal de agregar nueva factura
+        // Idealmente, se abriría un modal que permita seleccionar cliente, vendedor
+        // y agregar productos a la factura
+    }
+}

@@ -1,0 +1,446 @@
+@page "/facturas3"
+@using System.Collections.Generic
+@using System.Threading.Tasks
+@using System.Text.Json
+@using Services
+@inject ServicioEntidad servicioEntidad
+@inject NavigationManager navegacionManager
+
+<PageTitle>Lista de Facturas</PageTitle>
+
+<div class="container-xl">
+    <div class="table-responsive">
+        <div class="table-wrapper">
+            <div class="table-title">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <h2>Administrar <b>Facturas</b></h2>
+                    </div>
+                    <div class="col-sm-6">
+                        <button class="btn btn-info btn-sm" @onclick="() => mostrarModalConsulta = true">
+                            <i class="material-icons">&#xE8B6;</i> <span>Consultar Factura</span>
+                        </button>
+
+                        <button class="btn btn-danger btn-sm" @onclick="EliminarSeleccionadas">
+                            <i class="material-icons">&#xE15C;</i> <span>Eliminar</span>
+                        </button>
+
+                        <button class="btn btn-success btn-sm" @onclick="AbrirModalCrearFactura">
+                            <i class="material-icons">&#xE147;</i> <span>Agregar Nueva Factura</span>
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+
+            @if (cargando)
+            {
+                <p><em>Cargando...</em></p>
+            }
+            else if (facturas == null || facturas.Count == 0)
+            {
+                <p>No hay facturas disponibles.</p>
+            }
+            else
+            {
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                <span class="custom-checkbox">
+                                    <input type="checkbox" @bind="@seleccionarTodas">
+                                    <label></label>
+                                </span>
+                            </th>
+                            <th>Número</th>
+                            <th>Fecha</th>
+                            <th>Total</th>
+                            <th>Id Cliente</th>
+                            <th>Id Vendedor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var factura in facturas)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="custom-checkbox">
+                                        <input type="checkbox" @bind="@facturaSeleccionada[factura]">
+                                        <label></label>
+                                    </span>
+                                </td>
+                                <td>@ObtenerValor(factura, "numero")</td>
+                                <td>@ObtenerValor(factura, "fecha")</td>
+                                <td>@FormatearPrecio(ObtenerValor(factura, "total"))</td>
+                                <td>@ObtenerValor(factura, "fkidcliente")</td>
+                                <td>@ObtenerValor(factura, "fkidvendedor")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+
+@if (mostrarModalConsulta)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title">Consultar Factura</h4>
+                    <button type="button" class="close" @onclick="CerrarModalConsulta">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="form-group">
+                        <label>Número de Factura</label>
+                        <input type="text" class="form-control" @bind="numeroFacturaConsulta">
+                    </div>
+                    <button class="btn btn-primary mt-2" @onclick="ConsultarFactura">Buscar</button>
+
+                    @if (facturaConsultada != null)
+                    {
+                        <hr>
+                        <div class="form-group">
+                            <label>Fecha</label>
+                            <input type="text" class="form-control" value="@fechaFacturaConsulta" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Total</label>
+                            <input type="text" class="form-control" value="@totalFacturaConsulta" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Cliente</label>
+                            <input type="text" class="form-control" value="@clienteFacturaConsulta" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Vendedor</label>
+                            <input type="text" class="form-control" value="@vendedorFacturaConsulta" disabled>
+                        </div>
+
+                        @* Aquí va el bloque para mostrar productos *@
+                        @if (productosConsultados != null && productosConsultados.Count > 0)
+                        {
+                            <hr />
+                            <h5>Productos en la Factura</h5>
+                            <ul class="list-group">
+                                @foreach (var producto in productosConsultados)
+                                {
+                                    <li class="list-group-item">
+                                        Código: @ObtenerValor(producto, "fkcodproducto"),
+                                        Cantidad: @ObtenerValor(producto, "cantidad"),
+                                        Subtotal: @FormatearPrecio(ObtenerValor(producto, "subtotal"))
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalConsulta">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+
+@if (mostrarModalCrear)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form @onsubmit="GuardarFactura">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Nueva Factura</h4>
+                        <button type="button" class="close" @onclick="CerrarModalCrear">&times;</button>
+                    </div>
+                    <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                        <div class="form-group">
+                            <label>Cliente</label>
+                            <select class="form-control" @bind="idCliente">
+                                <option value="0">Seleccione un cliente</option>
+                                @foreach (var c in clientes)
+                                {
+                                    <option value="@ObtenerValor(c, "id")">@ObtenerNombrePersonaDesdeEntidad(c)</option>
+                                }
+                            </select>
+                        </div>
+
+                            <div class="form-group">
+                                <label>Vendedor</label>
+                                <select class="form-control" @bind="idVendedor">
+                                    <option value="0">Seleccione un vendedor</option>
+                                    @foreach (var v in vendedores)
+                                    {
+                                        <option value="@ObtenerValor(v, "id")">@ObtenerNombrePersonaDesdeEntidad(v)</option>
+                                    }
+                                </select>
+                            </div>
+
+                        <hr />
+                        <h5>Productos</h5>
+                        <div class="row mb-2" >
+                            <select class="form-control" @bind="codigoProductoAgregar">
+                                <option value="">Seleccione un producto</option>
+                                @foreach (var p in productos)
+                                {
+                                    <option value="@ObtenerValor(p, "codigo")">
+                                        @ObtenerValor(p, "nombre") (@ObtenerValor(p, "codigo"))
+                                    </option>
+                                }
+                            </select>
+
+                            <div class="col">
+                                <input type="number" placeholder="Cantidad" class="form-control" @bind="cantidadProductoAgregar">
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-primary" @onclick="AgregarProducto">Agregar</button>
+                            </div>
+                        </div>
+                        <ul class="list-group">
+                            @foreach (var item in productosFactura)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    @item["fkcodproducto"] - Cant: @item["cantidad"]
+                                    <button type="button" class="btn btn-sm btn-danger" @onclick="() => EliminarProducto(item)">Eliminar</button>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success">Guardar Factura</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalCrear">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    private List<Dictionary<string, object>> facturas = new();
+    private Dictionary<Dictionary<string, object>, bool> facturaSeleccionada = new();
+    private List<Dictionary<string, object>> personas = new();
+    private List<Dictionary<string, object>> clientes = new();
+    private List<Dictionary<string, object>> vendedores = new();
+    private List<Dictionary<string, object>> productos = new();
+    private List<Dictionary<string, object>> productosConsultados = new();
+
+
+    private bool cargando = true;
+    private bool seleccionarTodas
+    {
+        get => _seleccionarTodas;
+        set
+        {
+            _seleccionarTodas = value;
+            foreach (var clave in facturaSeleccionada.Keys.ToList())
+            {
+                facturaSeleccionada[clave] = _seleccionarTodas;
+            }
+        }
+    }
+    private bool _seleccionarTodas = false;
+
+    private bool mostrarModalConsulta = false;
+    private string numeroFacturaConsulta = "";
+
+    private Dictionary<string, object>? facturaConsultada = null;
+    
+    private string fechaFacturaConsulta = "";
+    private string totalFacturaConsulta = "";
+    private string clienteFacturaConsulta = "";
+    private string vendedorFacturaConsulta = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarFacturas();
+        await CargarClientesYVendedores();
+        await CargarProductos();
+    }
+
+    private async Task CargarProductos()
+    {
+        productos = await servicioEntidad.ObtenerTodosAsync("proyecto", "producto") ?? new();
+    }
+
+    private async Task CargarFacturas()
+    {
+        cargando = true;
+
+        try
+        {
+            var resultado = await servicioEntidad.ObtenerTodosAsync("proyecto", "factura");
+            facturas = resultado ?? new();
+            facturaSeleccionada = facturas.ToDictionary(f => f, f => false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar facturas: {ex.Message}");
+            facturas = new();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void EliminarSeleccionadas()
+    {
+        var seleccionadas = facturaSeleccionada.Where(x => x.Value).Select(x => x.Key).ToList();
+        foreach (var f in seleccionadas)
+        {
+            facturas.Remove(f);
+            facturaSeleccionada.Remove(f);
+        }
+        seleccionarTodas = false;
+    }
+
+    private string ObtenerValor(Dictionary<string, object> diccionario, string clave)
+    {
+        return diccionario.TryGetValue(clave, out var valor) ? valor?.ToString() ?? "" : "";
+    }
+
+    private string FormatearPrecio(string valor)
+    {
+        return decimal.TryParse(valor, out decimal precio) ? precio.ToString("C") : "$0.00";
+    }
+
+private async Task ConsultarFactura()
+{
+    if (string.IsNullOrWhiteSpace(numeroFacturaConsulta))
+        return;
+
+    var resultado = await servicioEntidad.ObtenerPorClaveAsync("proyecto", "factura", "numero", numeroFacturaConsulta);
+
+    if (resultado != null)
+    {
+        facturaConsultada = resultado;
+        fechaFacturaConsulta = ObtenerValor(resultado, "fecha");
+        totalFacturaConsulta = ObtenerValor(resultado, "total");
+        clienteFacturaConsulta = ObtenerValor(resultado, "fkidcliente");
+        vendedorFacturaConsulta = ObtenerValor(resultado, "fkidvendedor");
+
+        // Consultar productos asociados a la factura
+        productosConsultados = await servicioEntidad.ObtenerTodosAsync("proyecto", $"productosporfactura/fknumfactura/{numeroFacturaConsulta}") ?? new();
+
+    }
+    else
+    {
+        facturaConsultada = null;
+        productosConsultados.Clear();
+    }
+}
+
+    private void CerrarModalConsulta()
+    {
+        mostrarModalConsulta = false;
+        numeroFacturaConsulta = "";
+        facturaConsultada = null;
+        fechaFacturaConsulta = "";
+        totalFacturaConsulta = "";
+        clienteFacturaConsulta = "";
+        vendedorFacturaConsulta = "";
+    }
+
+
+private bool mostrarModalCrear = false;
+private int idCliente;
+private int idVendedor;
+private string codigoProductoAgregar = "";
+private int cantidadProductoAgregar = 0;
+private decimal totalFacturaCalculado = 0;
+
+private List<Dictionary<string, object>> productosFactura = new();
+
+private void AbrirModalCrearFactura()
+{
+    mostrarModalCrear = true;
+    idCliente = 0;
+    idVendedor = 0;
+    productosFactura.Clear();
+}
+
+private void CerrarModalCrear()
+{
+    mostrarModalCrear = false;
+    codigoProductoAgregar = "";
+    cantidadProductoAgregar = 0;
+    productosFactura.Clear();
+}
+
+private void AgregarProducto()
+{
+    if (!string.IsNullOrWhiteSpace(codigoProductoAgregar) && cantidadProductoAgregar > 0)
+    {
+        productosFactura.Add(new Dictionary<string, object>
+        {
+            { "fkcodproducto", codigoProductoAgregar },
+            { "cantidad", cantidadProductoAgregar }
+        });
+
+        codigoProductoAgregar = "";
+        cantidadProductoAgregar = 0;
+    }
+}
+
+private void EliminarProducto(Dictionary<string, object> producto)
+{
+    productosFactura.Remove(producto);
+}
+
+private async Task GuardarFactura()
+{
+    try
+    {
+        var parametros = new Dictionary<string, object>
+        {
+            { "fkidcliente", idCliente },
+            { "fkidvendedor", idVendedor },
+            { "productos", productosFactura } // ← Aquí está el cambio
+        };
+
+        var respuesta = await servicioEntidad.EjecutarProcedimientoAsync(
+            "proyecto",
+            "factura",
+            "insertar_factura_y_productos",
+            parametros
+        );
+
+        if (respuesta != null)
+        {
+            await CargarFacturas();
+            CerrarModalCrear();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error al guardar factura: {ex.Message}");
+    }
+}
+
+private async Task CargarClientesYVendedores()
+{
+    personas = await servicioEntidad.ObtenerTodosAsync("proyecto", "persona") ?? new();
+    clientes = await servicioEntidad.ObtenerTodosAsync("proyecto", "cliente") ?? new();
+    vendedores = await servicioEntidad.ObtenerTodosAsync("proyecto", "vendedor") ?? new();
+}
+private string ObtenerNombrePersonaDesdeEntidad(Dictionary<string, object> entidad)
+{
+    if (entidad.TryGetValue("fkcodpersona", out var fkcodpersona))
+    {
+        var persona = personas.FirstOrDefault(p => ObtenerValor(p, "codigo") == fkcodpersona?.ToString());
+        return persona != null ? ObtenerValor(persona, "nombre") : "(sin nombre)";
+    }
+
+    return "(sin persona)";
+}
+
+
+
+}

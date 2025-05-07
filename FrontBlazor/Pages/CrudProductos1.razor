@@ -1,0 +1,194 @@
+@page "/productos1"
+@using System.Collections.Generic
+@using System.Threading.Tasks
+@using Services
+@inject ServicioEntidad servicioEntidad
+@inject NavigationManager navegacionManager
+
+<PageTitle>Lista de Productos</PageTitle>
+
+<div class="container-xl">
+    <div class="table-responsive">
+        <div class="table-wrapper">
+            <div class="table-title">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <h2>Administrar <b>Productos</b></h2>
+                    </div>
+                    <div class="col-sm-6">
+                        <button class="btn btn-success" @onclick="AbrirModalAgregar">
+                            <i class="material-icons">&#xE147;</i> <span>Agregar Nuevo Producto</span>
+                        </button>
+                        <button class="btn btn-danger" @onclick="EliminarSeleccionados">
+                            <i class="material-icons">&#xE15C;</i> <span>Eliminar</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (cargando)
+            {
+                <p><em>Cargando...</em></p>
+            }
+            else if (productos == null || productos.Count == 0)
+            {
+                <p>No hay productos disponibles.</p>
+            }
+            else
+            {
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                <span class="custom-checkbox">
+                                    <input type="checkbox" @bind="@seleccionarTodos">
+                                    <label></label>
+                                </span>
+                            </th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Stock</th>
+                            <th>Valor Unitario</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var producto in productos)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="custom-checkbox">
+                                        <input type="checkbox" @bind="@productoSeleccionado[producto]">
+                                        <label></label>
+                                    </span>
+                                </td>
+                                <td>@ObtenerValor(producto, "codigo")</td>
+                                <td>@ObtenerValor(producto, "nombre")</td>
+                                <td>@ObtenerValor(producto, "stock")</td>
+                                <td>@FormatearPrecio(ObtenerValor(producto, "valorunitario"))</td>
+                                <td>
+                                    <a href="#" class="edit" @onclick="() => EditarProducto(producto)">
+                                        <i class="material-icons" title="Editar">&#xE254;</i>
+                                    </a>
+                                    <a href="#" class="delete" @onclick="() => EliminarProducto(producto)">
+                                        <i class="material-icons" title="Eliminar">&#xE872;</i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="clearfix">
+                    <div class="hint-text">Mostrando <b>@productos.Count</b> productos</div>
+                    <ul class="pagination">
+                        <li class="page-item disabled"><a href="#">Anterior</a></li>
+                        <li class="page-item active"><a href="#" class="page-link">1</a></li>
+                        <li class="page-item"><a href="#" class="page-link">2</a></li>
+                        <li class="page-item"><a href="#" class="page-link">3</a></li>
+                        <li class="page-item"><a href="#" class="page-link">Siguiente</a></li>
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (errorMensaje != null)
+{
+    <div class="alert alert-danger">
+        Error: @errorMensaje
+    </div>
+}
+
+@code {
+    private List<Dictionary<string, object>> productos = new List<Dictionary<string, object>>();
+    private bool cargando = true;
+    private string? errorMensaje = null;
+    
+    private bool seleccionarTodos
+    {
+        get => _seleccionarTodos;
+        set
+        {
+            _seleccionarTodos = value;
+            foreach (var clave in productoSeleccionado.Keys.ToList())
+            {
+                productoSeleccionado[clave] = _seleccionarTodos;
+            }
+        }
+    }
+    private bool _seleccionarTodos = false;
+    private Dictionary<Dictionary<string, object>, bool> productoSeleccionado = new();
+
+    private const string PROYECTO = "proyecto";
+    private const string TABLA = "producto";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarProductos();
+    }
+
+    private async Task CargarProductos()
+    {
+        cargando = true;
+        errorMensaje = null;
+
+        try
+        {
+            var resultado = await servicioEntidad.ObtenerTodosAsync(PROYECTO, TABLA);
+            productos = resultado ?? new List<Dictionary<string, object>>();
+
+            // Inicializar checkboxes
+            productoSeleccionado = productos.ToDictionary(p => p, p => false);
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar productos: {ex.Message}";
+            productos = new List<Dictionary<string, object>>();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private string ObtenerValor(Dictionary<string, object> diccionario, string clave)
+    {
+        return diccionario != null && diccionario.TryGetValue(clave, out var valor)
+            ? valor?.ToString() ?? string.Empty
+            : string.Empty;
+    }
+
+    private string FormatearPrecio(string valor)
+    {
+        return decimal.TryParse(valor, out decimal precio) ? precio.ToString("C") : "$0.00";
+    }
+
+    private void EditarProducto(Dictionary<string, object> producto)
+    {
+        // Aquí va la lógica para abrir un modal de edición
+    }
+
+    private void EliminarProducto(Dictionary<string, object> producto)
+    {
+        productos.Remove(producto);
+        productoSeleccionado.Remove(producto);
+    }
+
+    private void EliminarSeleccionados()
+    {
+        var seleccionados = productoSeleccionado.Where(x => x.Value).Select(x => x.Key).ToList();
+        foreach (var producto in seleccionados)
+        {
+            productos.Remove(producto);
+            productoSeleccionado.Remove(producto);
+        }
+        seleccionarTodos = false;
+    }
+
+    private void AbrirModalAgregar()
+    {
+        // Aquí va la lógica para abrir un modal de agregar nuevo producto
+    }
+}

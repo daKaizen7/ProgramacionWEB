@@ -1,0 +1,586 @@
+@page "/productos5"
+@using System.Collections.Generic
+@using System.Threading.Tasks
+@using Services
+@inject ServicioEntidad servicioEntidad
+@inject NavigationManager navegacionManager
+
+
+
+<div class="container-xl">
+    <div class="table-responsive">
+        <div class="table-wrapper">
+            <div class="table-title">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <h2>Administrar <b>Productos</b></h2>
+                    </div>
+                    <div class="col-sm-6">
+                        <button class="btn btn-info btn-sm" @onclick="() => mostrarModalConsulta = true">
+                            <i class="material-icons">&#xE8B6;</i> <span>Consultar</span>
+                        </button>
+
+                    <button class="btn btn-danger btn-sm" @onclick="MostrarModalEliminarMultiples">
+                        <i class="material-icons">&#xE15C;</i> <span>Eliminar</span>
+                    </button>
+
+                        <button class="btn btn-success btn-sm" @onclick="AbrirModal">
+                            <i class="material-icons">&#xE147;</i> <span>Agregar</span>
+                        </button>
+
+                        <button class="btn btn-info btn-sm" @onclick="() => EditarProductoSeleccionado()">
+                            <i class="material-icons">&#xE254;</i> <span>Editar Seleccionado</span>
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+
+            @if (cargando)
+            {
+                <p><em>Cargando...</em></p>
+            }
+            else if (productos == null || productos.Count == 0)
+            {
+                <p>No hay productos disponibles.</p>
+            }
+            else
+            {
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                <span class="custom-checkbox">
+                                    <input type="checkbox" @bind="@seleccionarTodos">
+                                    <label></label>
+                                </span>
+                            </th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Stock</th>
+                            <th>Valor Unitario</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var producto in productos)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="custom-checkbox">
+                                        <input type="checkbox" @bind="@productoSeleccionado[producto]">
+                                        <label></label>
+                                    </span>
+                                </td>
+                                <td>@ObtenerValor(producto, "codigo")</td>
+                                <td>@ObtenerValor(producto, "nombre")</td>
+                                <td>@ObtenerValor(producto, "stock")</td>
+                                <td>@FormatearPrecio(ObtenerValor(producto, "valorunitario"))</td>
+                                <td>
+                                    <a href="#" class="edit" @onclick="() => EditarProducto(producto)" @onclick:preventDefault>
+                                        <i class="material-icons" title="Editar">&#xE254;</i>
+                                    </a>
+                                <a href="#" class="delete" @onclick="() => EliminarProducto(producto)" @onclick:preventDefault>
+                                    <i class="material-icons" title="Eliminar">&#xE872;</i>
+                                </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form @onsubmit="GuardarProducto">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Agregar Producto</h4>
+                        <button type="button" class="close" @onclick="CerrarModal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Código</label>
+                            <input type="text" class="form-control" @bind="codigoProducto" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <input type="text" class="form-control" @bind="nombreProducto" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock</label>
+                            <input type="number" class="form-control" @bind="stockProducto" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Valor Unitario</label>
+                            <input type="number" step="0.01" class="form-control" @bind="valorUnitarioProducto" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalConsulta)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title">Consultar Producto</h4>
+                    <button type="button" class="close" @onclick="CerrarModalConsulta">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Código del Producto</label>
+                        <input type="text" class="form-control" @bind="codigoProductoConsulta">
+                    </div>
+                    <button class="btn btn-primary mt-2" @onclick="ConsultarProducto">Buscar</button>
+
+                    @if (productoConsultado != null)
+                    {
+                        <hr>
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <input type="text" class="form-control" value="@nombreProductoConsulta" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock</label>
+                            <input type="number" class="form-control" value="@stockProductoConsulta" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Valor Unitario</label>
+                            <input type="number" step="0.01" class="form-control" value="@valorUnitarioProductoConsulta" disabled>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModalConsulta">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalEditar)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form @onsubmit="ActualizarProducto">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Editar Producto</h4>
+                        <button type="button" class="close" @onclick="CerrarModalEditar">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Código</label>
+                            <input type="text" class="form-control" @bind="codigoProductoEditar" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <input type="text" class="form-control" @bind="nombreProductoEditar" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock</label>
+                            <input type="number" class="form-control" @bind="stockProductoEditar" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Valor Unitario</label>
+                            <input type="number" step="0.01" class="form-control" @bind="valorUnitarioProductoEditar" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalEditar">Cancelar</button>
+                        <button type="submit" class="btn btn-info">Actualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalEliminar)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form @onsubmit="ConfirmarEliminarProducto">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Eliminar Producto</h4>
+                        <button type="button" class="close" @onclick="CerrarModalEliminar">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p>¿Está seguro(a) de que desea eliminar este producto?</p>
+                        <p class="text-warning"><small>Esta acción no se puede deshacer.</small></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalEliminar">Cancelar</button>
+                        <button type="submit" class="btn btn-danger">Eliminar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalEliminarMultiples)
+{
+    <div class="modal fade show d-block" style="background: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form @onsubmit="ConfirmarEliminarSeleccionados">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Eliminar Productos Seleccionados</h4>
+                        <button type="button" class="close" @onclick="CerrarModalEliminarMultiples">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p>¿Está seguro de que desea eliminar los productos seleccionados?</p>
+                        <p class="text-warning"><small>Esta acción no se puede deshacer.</small></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalEliminarMultiples">Cancelar</button>
+                        <button type="submit" class="btn btn-danger">Eliminar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    private List<Dictionary<string, object>> productos = new List<Dictionary<string, object>>();
+    private Dictionary<Dictionary<string, object>, bool> productoSeleccionado = new();
+    private bool cargando = true;
+    private string? errorMensaje = null;
+
+    private bool seleccionarTodos
+    {
+        get => _seleccionarTodos;
+        set
+        {
+            _seleccionarTodos = value;
+            foreach (var clave in productoSeleccionado.Keys.ToList())
+            {
+                productoSeleccionado[clave] = _seleccionarTodos;
+            }
+        }
+    }
+    private bool _seleccionarTodos = false;
+
+    private bool mostrarModal = false;
+    private string codigoProducto = "";
+    private string nombreProducto = "";
+    private int stockProducto = 0;
+    private decimal valorUnitarioProducto = 0.0m;
+
+// Variables para controlar el modal de consulta
+private bool mostrarModalConsulta = false;
+private string codigoProductoConsulta = "";
+
+// Variables para mostrar los datos del producto consultado
+private Dictionary<string, object>? productoConsultado = null;
+private string nombreProductoConsulta = "";
+private int stockProductoConsulta = 0;
+private decimal valorUnitarioProductoConsulta = 0.0m;
+
+// Variables para el modal de edición
+private bool mostrarModalEditar = false;
+private Dictionary<string, object>? productoParaEditar = null;
+private string codigoProductoEditar = "";
+private string nombreProductoEditar = "";
+private int stockProductoEditar = 0;
+private decimal valorUnitarioProductoEditar = 0.0m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarProductos();
+    }
+
+    private async Task CargarProductos()
+    {
+        cargando = true;
+        errorMensaje = null;
+
+        try
+        {
+            var resultado = await servicioEntidad.ObtenerTodosAsync("proyecto", "producto");
+            productos = resultado ?? new List<Dictionary<string, object>>();
+            productoSeleccionado = productos.ToDictionary(p => p, p => false);
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al cargar productos: {ex.Message}";
+            productos = new List<Dictionary<string, object>>();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void AbrirModal()
+    {
+        mostrarModal = true;
+        nombreProducto = "";
+        stockProducto = 0;
+        valorUnitarioProducto = 0.0m;
+    }
+
+    private void CerrarModal()
+    {
+        mostrarModal = false;
+    }
+
+
+private async Task GuardarProducto()
+{
+    if (string.IsNullOrEmpty(codigoProducto) || string.IsNullOrEmpty(nombreProducto))
+    {
+        errorMensaje = "El código y el nombre del producto son obligatorios.";
+        return;
+    }
+
+    var nuevoProducto = new Dictionary<string, object>
+    {
+        { "codigo", codigoProducto },  // 🔥 Se debe digitar el código
+        { "nombre", nombreProducto },
+        { "stock", stockProducto },
+        { "valorunitario", valorUnitarioProducto }
+    };
+
+    // 🔥 Llamar a la API para guardar en la base de datos
+    bool resultado = await servicioEntidad.CrearAsync("proyecto", "producto", nuevoProducto);
+
+    if (resultado)  // Si la API responde con éxito
+    {
+        productos.Add(nuevoProducto);  // Agregarlo a la lista local
+        productoSeleccionado[nuevoProducto] = false;
+        CerrarModal();
+    }
+    else
+    {
+        errorMensaje = "Error al guardar el producto en la base de datos.";
+    }
+}
+
+    private string ObtenerValor(Dictionary<string, object> diccionario, string clave)
+    {
+        return diccionario.TryGetValue(clave, out var valor) ? valor?.ToString() ?? "" : "";
+    }
+
+    private string FormatearPrecio(string valor)
+    {
+        return decimal.TryParse(valor, out decimal precio) ? precio.ToString("C") : "$0.00";
+    }
+
+    private async Task ConsultarProducto()
+{
+    if (string.IsNullOrEmpty(codigoProductoConsulta))
+    {
+        errorMensaje = "Debe ingresar un código de producto.";
+        return;
+    }
+
+    var resultado = await servicioEntidad.ObtenerPorClaveAsync("proyecto", "producto", "codigo", codigoProductoConsulta);
+
+    if (resultado != null)
+    {
+        productoConsultado = resultado;
+        nombreProductoConsulta = ObtenerValor(resultado, "nombre");
+        stockProductoConsulta = int.TryParse(ObtenerValor(resultado, "stock"), out int stock) ? stock : 0;
+        valorUnitarioProductoConsulta = decimal.TryParse(ObtenerValor(resultado, "valorunitario"), out decimal valor) ? valor : 0.0m;
+    }
+    else
+    {
+        errorMensaje = "No se encontró el producto.";
+        productoConsultado = null;
+        nombreProductoConsulta = "";
+        stockProductoConsulta = 0;
+        valorUnitarioProductoConsulta = 0.0m;
+    }
+}
+private void CerrarModalConsulta()
+{
+    mostrarModalConsulta = false;
+    codigoProductoConsulta = "";
+    productoConsultado = null;
+    nombreProductoConsulta = "";
+    stockProductoConsulta = 0;
+    valorUnitarioProductoConsulta = 0.0m;
+}
+private void EditarProducto(Dictionary<string, object> producto)
+{
+    productoParaEditar = producto;
+    
+    // Cargar datos del producto en el formulario de edición
+    codigoProductoEditar = ObtenerValor(producto, "codigo");
+    nombreProductoEditar = ObtenerValor(producto, "nombre");
+    stockProductoEditar = int.TryParse(ObtenerValor(producto, "stock"), out int stock) ? stock : 0;
+    valorUnitarioProductoEditar = decimal.TryParse(ObtenerValor(producto, "valorunitario"), out decimal valor) ? valor : 0.0m;
+    
+    mostrarModalEditar = true;
+}
+
+private void CerrarModalEditar()
+{
+    mostrarModalEditar = false;
+    productoParaEditar = null;
+}
+
+private async Task ActualizarProducto()
+{
+    if (productoParaEditar == null || string.IsNullOrEmpty(nombreProductoEditar))
+    {
+        errorMensaje = "El nombre del producto es obligatorio.";
+        return;
+    }
+
+    var datosProductoActualizado = new Dictionary<string, object>
+    {
+        { "codigo", codigoProductoEditar },
+        { "nombre", nombreProductoEditar },
+        { "stock", stockProductoEditar },
+        { "valorunitario", valorUnitarioProductoEditar }
+    };
+
+    // Actualizar el producto en la base de datos
+    bool resultado = await servicioEntidad.ActualizarAsync(
+        "proyecto", 
+        "producto", 
+        "codigo", 
+        codigoProductoEditar, 
+        datosProductoActualizado);
+
+    if (resultado)
+    {
+        // Actualizar el producto en la lista local
+        int indice = productos.IndexOf(productoParaEditar);
+        if (indice >= 0)
+        {
+            productos[indice] = datosProductoActualizado;
+            productoSeleccionado.Remove(productoParaEditar);
+            productoSeleccionado[datosProductoActualizado] = false;
+        }
+        CerrarModalEditar();
+    }
+    else
+    {
+        errorMensaje = "Error al actualizar el producto en la base de datos.";
+    }
+}
+private void EditarProductoSeleccionado()
+{
+    var seleccionado = productoSeleccionado.FirstOrDefault(x => x.Value).Key;
+    if (seleccionado != null)
+    {
+        EditarProducto(seleccionado);
+    }
+    else
+    {
+        errorMensaje = "Debe seleccionar un producto para editar.";
+    }
+}
+// Variables para el modal de eliminación
+private bool mostrarModalEliminar = false;
+private Dictionary<string, object>? productoParaEliminar = null;
+
+private void EliminarProducto(Dictionary<string, object> producto)
+{
+    productoParaEliminar = producto;
+    mostrarModalEliminar = true;
+}
+
+private void CerrarModalEliminar()
+{
+    mostrarModalEliminar = false;
+    productoParaEliminar = null;
+}
+
+private async Task ConfirmarEliminarProducto()
+{
+    if (productoParaEliminar != null)
+    {
+        string codigo = ObtenerValor(productoParaEliminar, "codigo");
+        
+        // Eliminar de la base de datos
+        bool resultado = await servicioEntidad.EliminarAsync(
+            "proyecto", 
+            "producto", 
+            "codigo", 
+            codigo);
+            
+        if (resultado)
+        {
+            // Eliminar de la lista local
+            productos.Remove(productoParaEliminar);
+            productoSeleccionado.Remove(productoParaEliminar);
+        }
+        else
+        {
+            errorMensaje = "Error al eliminar el producto de la base de datos.";
+        }
+        
+        CerrarModalEliminar();
+    }
+}
+private async Task EliminarSeleccionados()
+{
+    var seleccionados = productoSeleccionado.Where(x => x.Value).Select(x => x.Key).ToList();
+    
+    foreach (var producto in seleccionados)
+    {
+        string codigo = ObtenerValor(producto, "codigo");
+        bool resultado = await servicioEntidad.EliminarAsync(
+            "proyecto", 
+            "producto", 
+            "codigo", 
+            codigo);
+            
+        if (resultado)
+        {
+            productos.Remove(producto);
+            productoSeleccionado.Remove(producto);
+        }
+    }
+    
+    seleccionarTodos = false;
+}
+// Variables para el modal de eliminación múltiple
+private bool mostrarModalEliminarMultiples = false;
+
+private void MostrarModalEliminarMultiples()
+{
+    // Verificar si hay productos seleccionados
+    var haySeleccionados = productoSeleccionado.Any(x => x.Value);
+    if (!haySeleccionados)
+    {
+        errorMensaje = "Debe seleccionar al menos un producto para eliminar.";
+        return;
+    }
+    
+    mostrarModalEliminarMultiples = true;
+}
+
+private void CerrarModalEliminarMultiples()
+{
+    mostrarModalEliminarMultiples = false;
+}
+
+private async Task ConfirmarEliminarSeleccionados()
+{
+    await EliminarSeleccionados();
+    CerrarModalEliminarMultiples();
+}
+}
