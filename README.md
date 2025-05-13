@@ -9,14 +9,9 @@ Este proyecto es una aplicación web universitaria que integra:
 ## 📁 Estructura del repositorio
 
 ProgramacionWEB/
-├── FrontBlazor/ # Frontend en Blazor Server
+├── FrontBlazor/ # Frontend en Blazor
 ├── csharpapigenerica/ # Backend en ASP.NET Core
 
-yaml
-Copiar
-Editar
-
----
 
 ## 🚀 Cómo ejecutar el proyecto
 
